@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Generador Simplex</title>
+    <style>
+      @font-face {
+        font-family: "warp";
+        src: url("TiltWarp-Regular.ttf");
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      h1 {
+        background: linear-gradient(to right, #67a1fe, #bd34fe);
+        -webkit-background-clip: text;
+        color: transparent;
+        font-family: "warp";
+      }
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        display: flex;
+        width: 95%;
+        font-weight: 900;
+        justify-content: center;
+        background-color: #150632;
+      }
+      input {
+        margin: 5px;
+        padding: 6px;
+        color: #251d37;
+        border: none;
+        border-radius: 6px;
+        outline: none;
+        font-size: 0.9rem;
+      }
+      .variable-group,
+      .restriction {
+        margin: 10px 0;
+      }
+      .btn {
+        margin: 10px 5px;
+        padding: 10px 15px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-danger {
+        background-color: #f44336;
+      }
+      h3,
+      h4 {
+        color: #cecece;
+      }
+      button {
+        border-radius: 6px;
+        background-color: #583a96 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div style="min-width: 25rem; width: 60%; max-width: 40rem">
+      <h1>Generador de Modelo Simplex</h1>
+
+      <h3>1. Define el número de variables</h3>
+      <input
+        type="number"
+        id="numVariables"
+        min="1"
+        placeholder="Número de variables"
+      />
+      <button class="btn" onclick="createObjective()">
+        Crear función objetivo
+      </button>
+
+      <div id="objectiveSection" style="margin-top: 20px"></div>
+
+      <h3>2. Añadir restricciones</h3>
+      <button class="btn" onclick="addRestriction()">Añadir restricción</button>
+      <button class="btn btn-danger" onclick="removeRestriction()">
+        Eliminar última restricción
+      </button>
+
+      <div id="restrictionsSection" style="margin-top: 20px"></div>
+
+      <h3>3. Exportar a LINGO</h3>
+      <button class="btn" onclick="exportLingo()">Descargar Modelo</button>
+    </div>
+    <script>
+      let numVariables = 0;
+
+      function createObjective() {
+        // Get number of variables
+        numVariables = parseInt(document.getElementById("numVariables").value);
+        if (isNaN(numVariables) || numVariables < 1) {
+          alert("Por favor, ingresa un número válido de variables.");
+          return;
+        }
+
+        // Clear previous content
+        const objectiveSection = document.getElementById("objectiveSection");
+        objectiveSection.innerHTML = "";
+
+        // Create inputs for the objective function
+        const title = document.createElement("h4");
+        title.textContent = "Función objetivo";
+        objectiveSection.appendChild(title);
+
+        const container = document.createElement("div");
+        container.className = "variable-group";
+        for (let i = 1; i <= numVariables; i++) {
+          const input = document.createElement("input");
+          input.type = "number";
+          input.placeholder = `Coeficiente X${i}`;
+          input.className = "obj-input";
+          input.dataset.variable = `X${i}`;
+          container.appendChild(input);
+        }
+
+        objectiveSection.appendChild(container);
+      }
+
+      function addRestriction() {
+        // Create a new restriction
+        const restrictionsSection = document.getElementById(
+          "restrictionsSection"
+        );
+
+        const container = document.createElement("div");
+        container.className = "restriction";
+
+        for (let i = 1; i <= numVariables; i++) {
+          const input = document.createElement("input");
+          input.type = "number";
+          input.placeholder = `Coeficiente X${i}`;
+          input.className = "rest-input";
+          input.dataset.variable = `X${i}`;
+          container.appendChild(input);
+        }
+
+        const constraintInput = document.createElement("input");
+        constraintInput.type = "number";
+        constraintInput.placeholder = "Valor (<=)";
+        constraintInput.className = "rest-constraint";
+        container.appendChild(constraintInput);
+
+        restrictionsSection.appendChild(container);
+      }
+
+      function removeRestriction() {
+        const restrictionsSection = document.getElementById(
+          "restrictionsSection"
+        );
+        const lastRestriction = restrictionsSection.lastChild;
+        if (lastRestriction) {
+          restrictionsSection.removeChild(lastRestriction);
+        } else {
+          alert("No hay restricciones para eliminar.");
+        }
+      }
+
+      function exportLingo() {
+        // Get objective function
+        const objInputs = document.querySelectorAll(".obj-input");
+
+        let lingoModel = "MODEL:\n\n! Funcion objetivo;\nMAX = ";
+        objInputs.forEach((input, index) => {
+          const coef = input.value || 0;
+          lingoModel += `${coef}*X${index + 1}`;
+          if (index < objInputs.length - 1) lingoModel += " + ";
+        });
+        lingoModel += ";\n\n";
+
+        // Get restrictions
+        lingoModel += "! Restricciones;\n";
+        const restrictions = document.querySelectorAll(".restriction");
+        restrictions.forEach((restriction, index) => {
+          const inputs = restriction.querySelectorAll(".rest-input");
+          const constraint =
+            restriction.querySelector(".rest-constraint").value;
+
+          inputs.forEach((input, i) => {
+            const coef = input.value || 0;
+            lingoModel += `${coef}*X${i + 1}`;
+            if (i < inputs.length - 1) lingoModel += " + ";
+          });
+          lingoModel += ` <= ${constraint};\n`;
+        });
+
+        // Add non-negativity constraints
+        lingoModel += "\n! Restricciones de no negatividad;\n";
+        for (let i = 1; i <= numVariables; i++) {
+          lingoModel += `X${i} >= 0;\n`;
+        }
+
+        lingoModel += "\nEND";
+
+        // Download as a file
+        const blob = new Blob([lingoModel], { type: "text/plain" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        const nombreLingo = crypto.randomUUID();
+        link.download = `${nombreLingo}.lg4`;
+        link.click();
+      }
+    </script>
+  </body>
+</html>
